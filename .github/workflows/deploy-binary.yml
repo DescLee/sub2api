@@ -1,0 +1,123 @@
+name: Deploy binary to VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to deploy'
+        required: false
+        default: 'main'
+        type: string
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.27.0'
+  PNPM_VERSION: '9.15.9'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Build Linux binary
+        working-directory: backend
+        env:
+          VERSION: ${{ github.ref_name }}-${{ github.sha }}
+        run: |
+          mkdir -p ../release
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -tags embed -trimpath -ldflags="-s -w -X main.Version=${VERSION}" \
+            -o ../release/sub2api ./cmd/server
+          cp ../deploy/config.example.yaml ../release/config.example.yaml
+          tar -C ../release -czf ../sub2api-${GITHUB_SHA}.tar.gz sub2api config.example.yaml
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v7
+        with:
+          name: sub2api-release
+          path: sub2api-${{ github.sha }}.tar.gz
+          retention-days: 7
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Download release package
+        uses: actions/download-artifact@v8
+        with:
+          name: sub2api-release
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${{ secrets.DEPLOY_PORT || 22 }}" -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload package
+        run: |
+          scp -P "${{ secrets.DEPLOY_PORT || 22 }}" \
+            "sub2api-${GITHUB_SHA}.tar.gz" \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/"
+
+      - name: Install package and restart service
+        env:
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || 22 }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          PACKAGE: sub2api-${{ github.sha }}.tar.gz
+        run: |
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "PACKAGE='$PACKAGE' bash -s" <<'REMOTE'
+          set -euo pipefail
+          base=/opt/sub2api
+          release="$base/releases/$PACKAGE"
+          mkdir -p "$base/releases"
+          mkdir -p "$release"
+          tar -xzf "/tmp/$PACKAGE" -C "$release"
+          chmod 755 "$release/sub2api"
+          ln -sfnT "$release" "$base/current"
+          if systemctl is-enabled --quiet sub2api 2>/dev/null; then
+            sudo systemctl restart sub2api
+            sudo systemctl is-active --quiet sub2api
+          else
+            echo 'sub2api.service is not installed; package uploaded but service was not restarted.'
+          fi
+          rm -f "/tmp/$PACKAGE"
+          REMOTE
