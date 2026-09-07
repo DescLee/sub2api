@@ -114,8 +114,13 @@ jobs:
           chmod 755 "$release/sub2api"
           ln -sfnT "$release" "$base/current"
           if systemctl is-enabled --quiet sub2api 2>/dev/null; then
-            sudo systemctl restart sub2api
-            sudo systemctl is-active --quiet sub2api
+            if [ "$(id -u)" -eq 0 ]; then
+              systemctl restart sub2api
+              systemctl is-active --quiet sub2api
+            else
+              sudo systemctl restart sub2api
+              sudo systemctl is-active --quiet sub2api
+            fi
           else
             echo 'sub2api.service is not installed; package uploaded but service was not restarted.'
           fi
