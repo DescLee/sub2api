@@ -108,11 +108,11 @@ jobs:
           set -euo pipefail
           base=/opt/sub2api
           release="$base/releases/$PACKAGE"
-          mkdir -p "$base/releases" "$base/current"
+          mkdir -p "$base/releases"
           mkdir -p "$release"
           tar -xzf "/tmp/$PACKAGE" -C "$release"
           chmod 755 "$release/sub2api"
-          ln -sfn "$release" "$base/current"
+          ln -sfnT "$release" "$base/current"
           if systemctl is-enabled --quiet sub2api 2>/dev/null; then
             sudo systemctl restart sub2api
             sudo systemctl is-active --quiet sub2api
