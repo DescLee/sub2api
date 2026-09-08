@@ -169,6 +169,8 @@ jobs:
           GIT_DIFF_SUMMARY=$(git show --stat --format='' "$GITHUB_SHA")
           MESSAGE=$(printf 'Sub2API 部署完成\n版本号: %s\n分支: %s\n提交人: %s\nMR 改动点:\n%s\nGit diff 摘要:\n%s\n提交记录: %s\n部署链接: %s' \
             "$PROJECT_VERSION" "$DEPLOY_BRANCH" "$COMMIT_AUTHOR" "$MR_POINTS" "$GIT_DIFF_SUMMARY" "$COMMIT_MESSAGE" "$DEPLOY_URL")
-          jq -n --arg text "$MESSAGE" '{msg_type: "text", content: {text: $text}}' \
+          printf '%s' "$MESSAGE" > "$RUNNER_TEMP/feishu-message.txt"
+          jq -n --rawfile text "$RUNNER_TEMP/feishu-message.txt" \
+            '{msg_type: "text", content: {text: $text}}' \
             | curl --fail-with-body -sS -X POST "$FEISHU_WEBHOOK_URL" \
                 -H 'Content-Type: application/json' -d @-
