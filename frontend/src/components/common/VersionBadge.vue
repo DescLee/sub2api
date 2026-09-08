@@ -2,8 +2,7 @@
   <div class="relative">
     <!-- Admin: Full version badge with dropdown -->
     <template v-if="isAdmin">
-      <button
-        @click="toggleDropdown"
+      <div
         class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-200 dark:bg-dark-800 dark:text-dark-400 dark:hover:bg-dark-700"
         :title="hasUpdate ? t('version.updateAvailable') : t('version.upToDate')"
       >
@@ -19,7 +18,7 @@
           ></span>
           <span class="relative inline-flex h-2 w-2 rounded-full bg-gray-500"></span>
         </span>
-      </button>
+      </div>
 
       <!-- Dropdown -->
       <transition name="dropdown">
@@ -725,10 +724,6 @@ const activeManualCommand = computed(() =>
 
 // Only show update check for release builds (binary/docker deployment)
 const isReleaseBuild = computed(() => buildType.value === 'release')
-
-function toggleDropdown() {
-  dropdownOpen.value = !dropdownOpen.value
-}
 
 function closeDropdown() {
   dropdownOpen.value = false
