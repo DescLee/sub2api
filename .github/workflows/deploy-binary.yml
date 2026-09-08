@@ -69,13 +69,13 @@ jobs:
             go build -tags embed -trimpath -ldflags="-s -w -X main.Version=${VERSION}" \
             -o ../release/sub2api ./cmd/server
           cp ../deploy/config.example.yaml ../release/config.example.yaml
-          tar -C ../release -czf ../sub2api-${GITHUB_SHA}.tar.gz sub2api config.example.yaml
+          tar -C ../release -czf ../sub2api-release.tar.gz sub2api config.example.yaml
 
       - name: Upload release package
         uses: actions/upload-artifact@v7
         with:
           name: sub2api-release
-          path: sub2api-${{ github.sha }}.tar.gz
+          path: sub2api-release.tar.gz
           retention-days: 7
 
   deploy:
@@ -103,9 +103,11 @@ jobs:
           ssh-keyscan -p "${{ secrets.DEPLOY_PORT || 22 }}" -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Upload package
+        env:
+          PACKAGE: sub2api-release.tar.gz
         run: |
           scp -P "${{ secrets.DEPLOY_PORT || 22 }}" \
-            "sub2api-${GITHUB_SHA}.tar.gz" \
+            "$PACKAGE" \
             "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/"
 
       - name: Install package and restart service
@@ -113,7 +115,7 @@ jobs:
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || 22 }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          PACKAGE: sub2api-${{ github.sha }}.tar.gz
+          PACKAGE: sub2api-release.tar.gz
         run: |
           ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
             "PACKAGE='$PACKAGE' bash -s" <<'REMOTE'
