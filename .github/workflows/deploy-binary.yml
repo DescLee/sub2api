@@ -22,11 +22,17 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      project_version: ${{ steps.project-version.outputs.value }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
+
+      - name: Read project version
+        id: project-version
+        run: echo "value=$(tr -d '\r\n' < version.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -126,3 +132,24 @@ jobs:
           fi
           rm -f "/tmp/$PACKAGE"
           REMOTE
+
+      - name: Send Feishu deployment notification
+        if: ${{ success() }}
+        continue-on-error: true
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          PROJECT_VERSION: ${{ needs.build.outputs.project_version }}
+          DEPLOY_BRANCH: ${{ github.ref_name }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.sha }}
+          DEPLOY_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$FEISHU_WEBHOOK_URL" ]; then
+            echo 'FEISHU_WEBHOOK_URL is not configured, skipping notification'
+            exit 0
+          fi
+          MESSAGE=$(printf 'Sub2API 部署完成\n版本号: %s\n分支: %s\n提交人: %s\n提交记录: %s\n部署链接: %s' \
+            "$PROJECT_VERSION" "$DEPLOY_BRANCH" "$COMMIT_AUTHOR" "$COMMIT_MESSAGE" "$DEPLOY_URL")
+          jq -n --arg text "$MESSAGE" '{msg_type: "text", content: {text: $text}}' \
+            | curl --fail-with-body -sS -X POST "$FEISHU_WEBHOOK_URL" \
+                -H 'Content-Type: application/json' -d @-
