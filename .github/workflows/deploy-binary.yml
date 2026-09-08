@@ -83,16 +83,16 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Checkout commit metadata
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
       - name: Download release package
         uses: actions/download-artifact@v8
         with:
           name: sub2api-release
           path: .
-
-      - name: Checkout commit metadata
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
 
       - name: Configure SSH
         env:
