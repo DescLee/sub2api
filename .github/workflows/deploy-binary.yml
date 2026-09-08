@@ -152,23 +152,14 @@ jobs:
           COMMIT_AUTHOR: ${{ github.actor }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.sha }}
           DEPLOY_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_SHA: ${{ github.sha }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           if [ -z "$FEISHU_WEBHOOK_URL" ]; then
             echo 'FEISHU_WEBHOOK_URL is not configured, skipping notification'
             exit 0
           fi
-          MR_POINTS=$(curl --fail-with-body -sS \
-            -H 'Accept: application/vnd.github+json' \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
-            | jq -r '.[0].body // empty' || true)
-          [ -n "$MR_POINTS" ] || MR_POINTS="$COMMIT_MESSAGE"
-          GIT_DIFF_SUMMARY=$(git show --stat --format='' "$GITHUB_SHA")
-          MESSAGE=$(printf 'Sub2API 部署完成\n版本号: %s\n分支: %s\n提交人: %s\nMR 改动点:\n%s\nGit diff 摘要:\n%s\n提交记录: %s\n部署链接: %s' \
-            "$PROJECT_VERSION" "$DEPLOY_BRANCH" "$COMMIT_AUTHOR" "$MR_POINTS" "$GIT_DIFF_SUMMARY" "$COMMIT_MESSAGE" "$DEPLOY_URL")
+          COMMIT_SUMMARY=$(printf '%s' "$COMMIT_MESSAGE" | head -n 1 | cut -c 1-200)
+          MESSAGE=$(printf 'Sub2API 部署完成\n版本号: %s\n分支: %s\n提交人: %s\n提交摘要: %s\n部署链接: %s' \
+            "$PROJECT_VERSION" "$DEPLOY_BRANCH" "$COMMIT_AUTHOR" "$COMMIT_SUMMARY" "$DEPLOY_URL")
           printf '%s' "$MESSAGE" > "$RUNNER_TEMP/feishu-message.txt"
           jq -n --rawfile text "$RUNNER_TEMP/feishu-message.txt" \
             '{msg_type: "text", content: {text: $text}}' \
