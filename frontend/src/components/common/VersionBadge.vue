@@ -671,7 +671,7 @@ const dropdownRef = ref<HTMLElement | null>(null)
 
 // Use store's cached version state
 const loading = computed(() => appStore.versionLoading)
-const currentVersion = computed(() => appStore.currentVersion || props.version || '')
+const currentVersion = computed(() => props.version || appStore.currentVersion || '')
 const latestVersion = computed(() => appStore.latestVersion)
 const hasUpdate = computed(() => appStore.hasUpdate)
 const releaseInfo = computed(() => appStore.releaseInfo)
