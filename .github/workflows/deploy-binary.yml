@@ -14,19 +14,43 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   GO_VERSION: '1.27.0'
-  PNPM_VERSION: '9.15.9'
+  PNPM_VERSION: '11.20.0'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      project_version: ${{ steps.project-version.outputs.value }}
+      change_summary: ${{ steps.change-summary.outputs.value }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
+
+      - name: Read project version
+        id: project-version
+        run: echo "value=$(tr -d '\r\n' < version.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Collect Git diff summary
+        id: change-summary
+        env:
+          BASE_SHA: ${{ github.event.before }}
+        run: |
+          if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            SUMMARY=$(git diff --stat "$BASE_SHA" "$GITHUB_SHA")
+          else
+            SUMMARY=$(git show --stat --format='' "$GITHUB_SHA")
+          fi
+          {
+            echo 'value<<EOF'
+            echo "$SUMMARY"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -36,7 +60,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
@@ -126,3 +150,34 @@ jobs:
           fi
           rm -f "/tmp/$PACKAGE"
           REMOTE
+
+      - name: Send Feishu deployment notification
+        if: ${{ success() }}
+        continue-on-error: true
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          PROJECT_VERSION: ${{ needs.build.outputs.project_version }}
+          DEPLOY_BRANCH: ${{ github.ref_name }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.sha }}
+          DEPLOY_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GIT_DIFF_SUMMARY: ${{ needs.build.outputs.change_summary }}
+        run: |
+          if [ -z "$FEISHU_WEBHOOK_URL" ]; then
+            echo 'FEISHU_WEBHOOK_URL is not configured, skipping notification'
+            exit 0
+          fi
+          MR_POINTS=$(curl --fail-with-body -sS \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+            | jq -r '.[0].body // empty' || true)
+          [ -n "$MR_POINTS" ] || MR_POINTS="$COMMIT_MESSAGE"
+          MESSAGE=$(printf 'Sub2API 部署完成\n版本号: %s\n分支: %s\n提交人: %s\nMR 改动点:\n%s\nGit diff 摘要:\n%s\n提交记录: %s\n部署链接: %s' \
+            "$PROJECT_VERSION" "$DEPLOY_BRANCH" "$COMMIT_AUTHOR" "$MR_POINTS" "$GIT_DIFF_SUMMARY" "$COMMIT_MESSAGE" "$DEPLOY_URL")
+          jq -n --arg text "$MESSAGE" '{msg_type: "text", content: {text: $text}}' \
+            | curl --fail-with-body -sS -X POST "$FEISHU_WEBHOOK_URL" \
+                -H 'Content-Type: application/json' -d @-
