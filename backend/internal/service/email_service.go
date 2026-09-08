@@ -256,7 +256,7 @@ func sendResendEmail(ctx context.Context, config *SMTPConfig, to, subject, body 
 	if err != nil {
 		return fmt.Errorf("resend request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("resend api returned %s", resp.Status)
 	}
@@ -501,7 +501,7 @@ func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
 		if err != nil {
 			return fmt.Errorf("resend connection failed: %w", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return fmt.Errorf("resend authentication failed: %s", resp.Status)
 		}
