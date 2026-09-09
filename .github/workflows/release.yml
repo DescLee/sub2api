@@ -274,7 +274,7 @@ jobs:
               }')"
 
       - name: Send Feishu deployment notification
-        if: ${{ success() }}
+        if: ${{ always() }}
         continue-on-error: true
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
@@ -286,6 +286,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          DEPLOY_STATUS: ${{ job.status }}
         run: |
           if [ -z "$FEISHU_WEBHOOK_URL" ]; then
             echo 'FEISHU_WEBHOOK_URL is not configured, skipping notification'
@@ -304,8 +305,13 @@ jobs:
           else
             GIT_DIFF_SUMMARY=$(git show --stat --format='' "$GITHUB_SHA")
           fi
-          MESSAGE=$(printf 'Sub2API 发布完成\n版本号: %s\n分支: %s\n提交人: %s\nMR 改动点:\n%s\nGit diff 摘要:\n%s\n提交记录: %s\n部署链接: %s' \
-            "$PROJECT_VERSION" "$DEPLOY_BRANCH" "$COMMIT_AUTHOR" "$MR_POINTS" "$GIT_DIFF_SUMMARY" "$COMMIT_MESSAGE" "$DEPLOY_URL")
+          if [ "$DEPLOY_STATUS" = "success" ]; then
+            TITLE='Sub2API 发布完成'
+          else
+            TITLE='Sub2API 发布失败'
+          fi
+          MESSAGE=$(printf '%s\n版本号: %s\n分支: %s\n提交人: %s\nMR 改动点:\n%s\nGit diff 摘要:\n%s\n提交记录: %s\n部署链接: %s' \
+            "$TITLE" "$PROJECT_VERSION" "$DEPLOY_BRANCH" "$COMMIT_AUTHOR" "$MR_POINTS" "$GIT_DIFF_SUMMARY" "$COMMIT_MESSAGE" "$DEPLOY_URL")
           jq -n --arg text "$MESSAGE" '{msg_type: "text", content: {text: $text}}' \
             | curl --fail-with-body -sS -X POST "$FEISHU_WEBHOOK_URL" \
                 -H 'Content-Type: application/json' -d @-

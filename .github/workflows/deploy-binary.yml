@@ -143,7 +143,7 @@ jobs:
           REMOTE
 
       - name: Send Feishu deployment notification
-        if: ${{ success() }}
+        if: ${{ always() }}
         continue-on-error: true
         env:
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
@@ -152,14 +152,20 @@ jobs:
           COMMIT_AUTHOR: ${{ github.actor }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.sha }}
           DEPLOY_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DEPLOY_STATUS: ${{ job.status }}
         run: |
           if [ -z "$FEISHU_WEBHOOK_URL" ]; then
             echo 'FEISHU_WEBHOOK_URL is not configured, skipping notification'
             exit 0
           fi
           COMMIT_SUMMARY=$(printf '%s' "$COMMIT_MESSAGE" | head -n 1 | cut -c 1-200)
-          MESSAGE=$(printf 'Sub2API 部署完成\n版本号: %s\n分支: %s\n提交人: %s\n提交摘要: %s\n部署链接: %s' \
-            "$PROJECT_VERSION" "$DEPLOY_BRANCH" "$COMMIT_AUTHOR" "$COMMIT_SUMMARY" "$DEPLOY_URL")
+          if [ "$DEPLOY_STATUS" = "success" ]; then
+            TITLE='Sub2API 部署完成'
+          else
+            TITLE='Sub2API 部署失败'
+          fi
+          MESSAGE=$(printf '%s\n版本号: %s\n分支: %s\n提交人: %s\n提交摘要: %s\n部署链接: %s' \
+            "$TITLE" "$PROJECT_VERSION" "$DEPLOY_BRANCH" "$COMMIT_AUTHOR" "$COMMIT_SUMMARY" "$DEPLOY_URL")
           printf '%s' "$MESSAGE" > "$RUNNER_TEMP/feishu-message.txt"
           jq -n --rawfile text "$RUNNER_TEMP/feishu-message.txt" \
             '{msg_type: "text", content: {text: $text}}' \
