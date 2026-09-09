@@ -16,6 +16,10 @@
 
 用户明确提出“merge到main”时，合并成功后切换到本地 `main` 分支；合并失败或未完成时不得切换。
 
+## Merge 合并方式
+
+创建 Pull Request 后，使用 GitHub 的 `Merge when all checks have passed`，等待所有流水线检查通过后自动合入 `main`。
+
 ## Push 前检查
 
 每次 push 代码前，必须先执行项目 lint 检查；lint 未通过时不得 push，需先修复问题并重新检查。
