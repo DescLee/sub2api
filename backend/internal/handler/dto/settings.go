@@ -9,6 +9,7 @@ import (
 
 // CustomMenuItem represents a user-configured custom menu entry.
 type CustomMenuItem struct {
+	OpenMode   string `json:"open_mode,omitempty"` // "iframe" (default) or "new_tab"
 	ID         string `json:"id"`
 	Label      string `json:"label"`
 	IconSVG    string `json:"icon_svg"`

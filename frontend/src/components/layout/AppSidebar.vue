@@ -92,7 +92,7 @@
                       ? 'sidebar-wallet'
                       : undefined
               "
-              @click="handleMenuItemClick(item.path)"
+              @click.capture="handleMenuItemClick(item.path, $event)"
             >
               <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
               <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
@@ -117,7 +117,7 @@
             :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
             :title="sidebarCollapsed ? item.label : undefined"
             :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
-            @click="handleMenuItemClick(item.path)"
+            @click.capture="handleMenuItemClick(item.path, $event)"
           >
             <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
@@ -137,7 +137,7 @@
             :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
             :title="sidebarCollapsed ? item.label : undefined"
             :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
-            @click="handleMenuItemClick(item.path)"
+            @click.capture="handleMenuItemClick(item.path, $event)"
           >
             <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
@@ -859,7 +859,13 @@ function closeMobile() {
   appStore.setMobileOpen(false)
 }
 
-function handleMenuItemClick(itemPath: string) {
+function handleMenuItemClick(itemPath: string, event?: MouseEvent) {
+  const custom = [...customMenuItemsForUser.value, ...customMenuItemsForAdmin.value].find(i => `/custom/${i.id}` === itemPath)
+  if (custom?.open_mode === 'new_tab') {
+    event?.preventDefault()
+    window.open(custom.page_slug || custom.url.startsWith('md:') ? itemPath : custom.url, '_blank', 'noopener,noreferrer')
+    return
+  }
   if (mobileOpen.value) {
     setTimeout(() => {
       appStore.setMobileOpen(false)
