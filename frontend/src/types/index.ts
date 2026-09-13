@@ -192,6 +192,7 @@ export interface CustomMenuItem {
   url: string
   page_slug?: string
   visibility: 'user' | 'admin'
+  open_mode?: 'iframe' | 'new_tab'
   sort_order: number
 }
 
